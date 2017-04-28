@@ -4,7 +4,7 @@
 // Authors:
 //   Demis Bellot (demis.bellot@gmail.com)
 //
-// Copyright 2013 Service Stack LLC. All Rights Reserved.
+// Copyright 2013 ServiceStack, Inc. All Rights Reserved.
 //
 // Licensed under the same terms of ServiceStack.
 //
@@ -61,6 +61,8 @@ namespace ServiceStack.OrmLite
 
         string GetQuotedValue(object value, Type fieldType);
 
+        string GetDefaultValue(Type tableType, string fieldName);
+
         object GetParamValue(object value, Type fieldType);
 
         object ToDbValue(object value, Type type);
@@ -83,18 +85,14 @@ namespace ServiceStack.OrmLite
 
         string SanitizeFieldNameForParamName(string fieldName);
 
-        string GetColumnDefinition(
-            string fieldName, Type fieldType, bool isPrimaryKey, bool autoIncrement,
-            bool isNullable, 
-            bool isRowVersion,
-            int? fieldLength,
-            int? scale, 
-            string defaultValue,
-            string customFieldDefinition);
+        string GetColumnDefinition(FieldDefinition fieldDef);
 
         long GetLastInsertId(IDbCommand command);
 
+        [Obsolete("Use GetLastInsertIdSqlSuffix()")]
         long InsertAndGetLastInsertId<T>(IDbCommand dbCmd);
+
+        string GetLastInsertIdSqlSuffix<T>();
 
         string ToSelectStatement(Type tableType, string sqlFilter, params object[] filterParams);
 

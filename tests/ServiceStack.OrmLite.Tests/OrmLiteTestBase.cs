@@ -16,7 +16,7 @@ namespace ServiceStack.OrmLite.Tests
         public static string SqliteFileDir = "~/App_Data/".MapAbsolutePath();
         public static string SqliteFileDb = "~/App_Data/db.sqlite".MapAbsolutePath();
         public static string SqlServerDb = "~/App_Data/Database1.mdf".MapAbsolutePath();
-        public static string SqlServerBuildDb = "Server=localhost;Database=test;User Id=test;Password=test;";
+        public static string SqlServerBuildDb = "Server=localhost;Database=test;User Id=test;Password=test;MultipleActiveResultSets=True;";
         //public static string SqlServerBuildDb = "Data Source=localhost;Initial Catalog=TestDb;Integrated Security=SSPI;Connect Timeout=120;MultipleActiveResultSets=True";
 
         public static string OracleDb = "Data Source=localhost:1521/ormlite;User ID=test;Password=test";
@@ -25,9 +25,9 @@ namespace ServiceStack.OrmLite.Tests
         public static string FirebirdDb = @"User=SYSDBA;Password=masterkey;Database=C:\src\ServiceStack.OrmLite\tests\ServiceStack.OrmLite.Tests\App_Data\TEST.FDB;DataSource=localhost;Dialect=3;charset=ISO8859_1;";
 
         public static Dialect DefaultDialect = Dialect.Sqlite;
+
         public static IOrmLiteDialectProvider DefaultProvider = SqlServerDialect.Provider;
         public static string DefaultConnection = SqlServerBuildDb;
-
         public static string GetDefaultConnection()
         {
             OrmLiteConfig.DialectProvider = DefaultProvider;
@@ -69,13 +69,11 @@ namespace ServiceStack.OrmLite.Tests
             return dbFactory;
         }
 
-#if !NETCORE
         public static OrmLiteConnectionFactory CreateMySqlDbFactory()
         {
             var dbFactory = new OrmLiteConnectionFactory(Config.MySqlDb, MySqlDialect.Provider);
             return dbFactory;
         }
-#endif
 
         public static OrmLiteConnectionFactory CreatePostgreSqlDbFactory()
         {
@@ -137,10 +135,8 @@ namespace ServiceStack.OrmLite.Tests
                     return Init(Config.SqlServerBuildDb, SqlServerDialect.Provider);
                 case Dialect.SqlServer2012:
                     return Init(Config.SqlServerBuildDb, SqlServer2012Dialect.Provider);
-#if !NETCORE
                 case Dialect.MySql:
                     return Init(Config.MySqlDb, MySqlDialect.Provider);
-#endif                    
                 case Dialect.PostgreSql:
                     return Init(Config.PostgreSqlDb, PostgreSqlDialect.Provider);
                 case Dialect.SqlServerMdf:

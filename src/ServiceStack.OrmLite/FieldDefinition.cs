@@ -4,7 +4,7 @@
 // Authors:
 //   Demis Bellot (demis.bellot@gmail.com)
 //
-// Copyright 2013 Service Stack LLC. All Rights Reserved.
+// Copyright 2013 ServiceStack, Inc. All Rights Reserved.
 //
 // Licensed under the same terms of ServiceStack.
 //
@@ -53,6 +53,8 @@ namespace ServiceStack.OrmLite
         public int? Scale { get; set; }  //  for decimal type
 
         public string DefaultValue { get; set; }
+
+        public string CheckConstraint { get; set; }
 
         public ForeignKeyConstraint ForeignKey { get; set; }
 
@@ -124,6 +126,44 @@ namespace ServiceStack.OrmLite
         {
             return (Alias != null && Alias + "Id" == name)
                     || Name + "Id" == name;
+        }
+
+        public FieldDefinition Clone(Action<FieldDefinition> modifier = null)
+        {
+            var fieldDef = new FieldDefinition
+            {
+                Name = Name,
+                Alias = Alias,
+                FieldType = FieldType,
+                FieldTypeDefaultValue = FieldTypeDefaultValue,
+                TreatAsType = TreatAsType,
+                PropertyInfo = PropertyInfo,
+                IsPrimaryKey = IsPrimaryKey,
+                AutoIncrement = AutoIncrement,
+                IsNullable = IsNullable,
+                IsIndexed = IsIndexed,
+                IsUnique = IsUnique,
+                IsClustered = IsClustered,
+                IsNonClustered = IsNonClustered,
+                IsRowVersion = IsRowVersion,
+                FieldLength = FieldLength,
+                Scale = Scale,
+                DefaultValue = DefaultValue,
+                ForeignKey = ForeignKey,
+                GetValueFn = GetValueFn,
+                SetValueFn = SetValueFn,
+                Sequence = Sequence,
+                IsComputed = IsComputed,
+                ComputeExpression = ComputeExpression,
+                CustomSelect = CustomSelect,
+                BelongToModelName = BelongToModelName,
+                IsReference = IsReference,
+                CustomFieldDefinition = CustomFieldDefinition,
+                IsRefType = IsRefType,
+            };
+
+            modifier?.Invoke(fieldDef);
+            return fieldDef;
         }
     }
 

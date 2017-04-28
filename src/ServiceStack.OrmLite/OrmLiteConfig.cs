@@ -4,7 +4,7 @@
 // Authors:
 //   Demis Bellot (demis.bellot@gmail.com)
 //
-// Copyright 2013 Service Stack LLC. All Rights Reserved.
+// Copyright 2013 ServiceStack, Inc. All Rights Reserved.
 //
 // Licensed under the same terms of ServiceStack.
 //
@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using ServiceStack.Logging;
 
 namespace ServiceStack.OrmLite
 {
@@ -147,6 +148,12 @@ namespace ServiceStack.OrmLite
             return dbConn;
         }
 
+        public static void ResetLogFactory(ILogFactory logFactory)
+        {
+            LogManager.LogFactory = logFactory;
+            OrmLiteResultsFilterExtensions.Log = LogManager.LogFactory.GetLogger(typeof(OrmLiteResultsFilterExtensions));
+        }
+
         public static bool DisableColumnGuessFallback { get; set; }
         public static bool StripUpperInLike { get; set; } 
 #if NETSTANDARD1_3
@@ -180,6 +187,7 @@ namespace ServiceStack.OrmLite
 
         public static Action<IDbCommand, object> InsertFilter { get; set; }
         public static Action<IDbCommand, object> UpdateFilter { get; set; }
+        public static Action<IUntypedSqlExpression> SqlExpressionSelectFilter { get; set; }
 
         public static Func<string, string> StringFilter { get; set; }
 
@@ -193,6 +201,8 @@ namespace ServiceStack.OrmLite
         public static bool IsCaseInsensitive { get; set; }
 
         public static bool DeoptimizeReader { get; set; }
+
+        public static bool SkipForeignKeys { get; set; }
 
         public static Func<string, string> ParamNameFilter { get; set; }
     }

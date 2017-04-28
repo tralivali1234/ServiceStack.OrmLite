@@ -105,12 +105,24 @@ namespace ServiceStack.OrmLite
         {
             var dbCmd = CreateCommand(dbConn);
 
-            return filter(dbCmd)
-                .Then(t =>
-                {
-                    DisposeCommand(dbCmd, dbConn);
-                    return t;
-                });
+            try
+            {
+                return filter(dbCmd)
+                    .ContinueWith(t =>
+                    {
+                        DisposeCommand(dbCmd, dbConn);
+
+                        if (t.IsFaulted)
+                            throw t.Exception.UnwrapIfSingleException();
+
+                        return t.Result;
+                    });
+            }
+            catch
+            {
+                DisposeCommand(dbCmd, dbConn);
+                throw;
+            }
         }
 
         public virtual Task<IDbCommand> Exec(IDbConnection dbConn, Func<IDbCommand, Task<IDbCommand>> filter)

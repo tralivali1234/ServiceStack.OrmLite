@@ -2,11 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
-using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ServiceStack.DataAnnotations;
 using ServiceStack.OrmLite.SqlServer.Converters;
 using ServiceStack.Text;
 #if NETSTANDARD1_3
@@ -108,15 +107,9 @@ namespace ServiceStack.OrmLite.SqlServer
             this.GetDateTimeConverter().DateStyle = DateTimeKind.Utc;
         }
 
-        public override SqlExpression<T> SqlExpression<T>()
-        {
-            return new SqlServerExpression<T>(this);
-        }
+        public override SqlExpression<T> SqlExpression<T>() => new SqlServerExpression<T>(this);
 
-        public override IDbDataParameter CreateParam()
-        {
-            return new SqlParameter();
-        }
+        public override IDbDataParameter CreateParam() => new SqlParameter();
 
         public override bool DoesTableExist(IDbCommand dbCmd, string tableName, string schema = null)
         {
@@ -186,17 +179,7 @@ namespace ServiceStack.OrmLite.SqlServer
 
         public override string ToAddColumnStatement(Type modelType, FieldDefinition fieldDef)
         {
-            var column = GetColumnDefinition(fieldDef.FieldName,
-                                             fieldDef.ColumnType,
-                                             fieldDef.IsPrimaryKey,
-                                             fieldDef.AutoIncrement,
-                                             fieldDef.IsNullable,
-                                             fieldDef.IsRowVersion,
-                                             fieldDef.FieldLength,
-                                             fieldDef.Scale,
-                                             fieldDef.DefaultValue,
-                                             fieldDef.CustomFieldDefinition);
-
+            var column = GetColumnDefinition(fieldDef);
             var modelName = GetQuotedTableName(GetModel(modelType).ModelName);
 
             return $"ALTER TABLE {modelName} ADD {column};";
@@ -204,17 +187,7 @@ namespace ServiceStack.OrmLite.SqlServer
 
         public override string ToAlterColumnStatement(Type modelType, FieldDefinition fieldDef)
         {
-            var column = GetColumnDefinition(fieldDef.FieldName,
-                                             fieldDef.ColumnType,
-                                             fieldDef.IsPrimaryKey,
-                                             fieldDef.AutoIncrement,
-                                             fieldDef.IsNullable,
-                                             fieldDef.IsRowVersion,
-                                             fieldDef.FieldLength,
-                                             fieldDef.Scale,
-                                             fieldDef.DefaultValue,
-                                             fieldDef.CustomFieldDefinition);
-
+            var column = GetColumnDefinition(fieldDef);
             var modelName = GetQuotedTableName(GetModel(modelType).ModelName);
 
             return $"ALTER TABLE {modelName} ALTER COLUMN {column};";
@@ -223,22 +196,53 @@ namespace ServiceStack.OrmLite.SqlServer
         public override string ToChangeColumnNameStatement(Type modelType, FieldDefinition fieldDef, string oldColumnName)
         {
             var modelName = NamingStrategy.GetTableName(GetModel(modelType).ModelName);
-
             var objectName = $"{modelName}.{oldColumnName}";
 
             return $"EXEC sp_rename {GetQuotedValue(objectName)}, {GetQuotedValue(fieldDef.FieldName)}, {GetQuotedValue("COLUMN")};";
         }
 
-        public override string GetColumnDefinition(string fieldName, Type fieldType, bool isPrimaryKey, bool autoIncrement,
-            bool isNullable, bool isRowVersion, int? fieldLength, int? scale, string defaultValue, string customFieldDefinition)
+        public override string GetColumnDefinition(FieldDefinition fieldDef)
         {
-            if (isRowVersion)
-                return $"{fieldName} rowversion NOT NULL";
+            // https://msdn.microsoft.com/en-us/library/ms182776.aspx
+            if (fieldDef.IsRowVersion)
+                return $"{fieldDef.FieldName} rowversion NOT NULL";
 
-            var definition = base.GetColumnDefinition(fieldName, fieldType, isPrimaryKey, autoIncrement,
-                isNullable, isRowVersion, fieldLength, scale, defaultValue, customFieldDefinition);
+            var fieldDefinition = fieldDef.CustomFieldDefinition ??
+                GetColumnTypeDefinition(fieldDef.ColumnType, fieldDef.FieldLength, fieldDef.Scale);
 
-            return definition;
+            var sql = StringBuilderCache.Allocate();
+            sql.Append($"{GetQuotedColumnName(fieldDef.FieldName)} {fieldDefinition}");
+
+            if (fieldDef.FieldType == typeof(string))
+            {
+                // https://msdn.microsoft.com/en-us/library/ms184391.aspx
+                var collation = fieldDef.PropertyInfo.FirstAttribute<SqlServerCollateAttribute>()?.Collation;
+                if (!string.IsNullOrEmpty(collation))
+                {
+                    sql.Append($" COLLATE {collation}");
+                }
+            }
+
+            if (fieldDef.IsPrimaryKey)
+            {
+                sql.Append(" PRIMARY KEY");
+                if (fieldDef.AutoIncrement)
+                {
+                    sql.Append(" ").Append(AutoIncrementDefinition);
+                }
+            }
+            else
+            {
+                sql.Append(fieldDef.IsNullable ? " NULL" : " NOT NULL");
+            }            
+
+            var defaultValue = GetDefaultValue(fieldDef);
+            if (!string.IsNullOrEmpty(defaultValue))
+            {
+                sql.AppendFormat(DefaultValueFormat, defaultValue);
+            }
+
+            return StringBuilderCache.ReturnAndFree(sql);
         }
 
         public override string ToSelectStatement(ModelDefinition modelDef,
@@ -351,48 +355,29 @@ namespace ServiceStack.OrmLite.SqlServer
             return base.GetLoadChildrenSubSelect(expr);
         }
 
-        protected SqlConnection Unwrap(IDbConnection db)
-        {
-            return (SqlConnection)db.ToDbConnection();
-        }
+        protected SqlConnection Unwrap(IDbConnection db) => (SqlConnection)db.ToDbConnection();
 
-        protected SqlCommand Unwrap(IDbCommand cmd)
-        {
-            return (SqlCommand)cmd.ToDbCommand();
-        }
+        protected SqlCommand Unwrap(IDbCommand cmd) => (SqlCommand)cmd.ToDbCommand();
 
-        protected SqlDataReader Unwrap(IDataReader reader)
-        {
-            return (SqlDataReader)reader;
-        }
+        protected SqlDataReader Unwrap(IDataReader reader) => (SqlDataReader)reader;
 
 #if ASYNC
-        public override Task OpenAsync(IDbConnection db, CancellationToken token)
-        {
-            return Unwrap(db).OpenAsync(token);
-        }
+        public override Task OpenAsync(IDbConnection db, CancellationToken token = default(CancellationToken))
+            => Unwrap(db).OpenAsync(token);
 
-        public override Task<IDataReader> ExecuteReaderAsync(IDbCommand cmd, CancellationToken token)
-        {
-            return Unwrap(cmd).ExecuteReaderAsync(token).Then(x => (IDataReader)x);
-        }
+        public override Task<IDataReader> ExecuteReaderAsync(IDbCommand cmd, CancellationToken token = default(CancellationToken))
+            => Unwrap(cmd).ExecuteReaderAsync(token).Then(x => (IDataReader)x);
 
-        public override Task<int> ExecuteNonQueryAsync(IDbCommand cmd, CancellationToken token)
-        {
-            return Unwrap(cmd).ExecuteNonQueryAsync(token);
-        }
+        public override Task<int> ExecuteNonQueryAsync(IDbCommand cmd, CancellationToken token = default(CancellationToken))
+            => Unwrap(cmd).ExecuteNonQueryAsync(token);
 
-        public override Task<object> ExecuteScalarAsync(IDbCommand cmd, CancellationToken token)
-        {
-            return Unwrap(cmd).ExecuteScalarAsync(token);
-        }
+        public override Task<object> ExecuteScalarAsync(IDbCommand cmd, CancellationToken token = default(CancellationToken))
+            => Unwrap(cmd).ExecuteScalarAsync(token);
 
-        public override Task<bool> ReadAsync(IDataReader reader, CancellationToken token)
-        {
-            return Unwrap(reader).ReadAsync(token);
-        }
+        public override Task<bool> ReadAsync(IDataReader reader, CancellationToken token = default(CancellationToken))
+            => Unwrap(reader).ReadAsync(token);
 
-        public override async Task<List<T>> ReaderEach<T>(IDataReader reader, Func<T> fn, CancellationToken token)
+        public override async Task<List<T>> ReaderEach<T>(IDataReader reader, Func<T> fn, CancellationToken token = default(CancellationToken))
         {
             try
             {
@@ -410,7 +395,7 @@ namespace ServiceStack.OrmLite.SqlServer
             }
         }
 
-        public override async Task<Return> ReaderEach<Return>(IDataReader reader, Action fn, Return source, CancellationToken token)
+        public override async Task<Return> ReaderEach<Return>(IDataReader reader, Action fn, Return source, CancellationToken token = default(CancellationToken))
         {
             try
             {
@@ -426,7 +411,7 @@ namespace ServiceStack.OrmLite.SqlServer
             }
         }
 
-        public override async Task<T> ReaderRead<T>(IDataReader reader, Func<T> fn, CancellationToken token)
+        public override async Task<T> ReaderRead<T>(IDataReader reader, Func<T> fn, CancellationToken token = default(CancellationToken))
         {
             try
             {

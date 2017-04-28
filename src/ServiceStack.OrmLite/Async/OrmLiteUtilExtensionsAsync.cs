@@ -1,5 +1,5 @@
 ﻿#if ASYNC
-// Copyright (c) Service Stack LLC. All Rights Reserved.
+// Copyright (c) ServiceStack, Inc. All Rights Reserved.
 // License: https://raw.github.com/ServiceStack/ServiceStack/master/license.txt
 
 using System;
@@ -111,7 +111,7 @@ namespace ServiceStack.OrmLite
                 var row = type.CreateInstance();
                 row.PopulateWithSqlReader(dialectProvider, reader, indexCache, values);
                 return row;
-            }, token).Then(t =>
+            }, token).Then<object,object>(t =>
             {
                 reader.Dispose();
                 return t;

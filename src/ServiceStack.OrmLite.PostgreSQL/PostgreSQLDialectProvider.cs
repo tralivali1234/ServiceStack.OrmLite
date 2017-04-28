@@ -52,7 +52,7 @@ namespace ServiceStack.OrmLite.PostgreSQL
             RegisterConverter<byte[]>(new PostrgreSqlByteArrayConverter());
 
             //TODO provide support for pgsql native datastructures:
-            //RegisterConverter<string[]>(new PostgreSqlStringArrayConverter());
+            RegisterConverter<string[]>(new PostgreSqlStringArrayConverter());
             RegisterConverter<int[]>(new PostgreSqlIntArrayConverter());
             RegisterConverter<long[]>(new PostgreSqlLongArrayConverter());
 
@@ -62,51 +62,41 @@ namespace ServiceStack.OrmLite.PostgreSQL
             };
         }
 
-        public override string GetColumnDefinition(
-            string fieldName,
-            Type fieldType,
-            bool isPrimaryKey,
-            bool autoIncrement,
-            bool isNullable, 
-            bool isRowVersion,
-            int? fieldLength,
-            int? scale,
-            string defaultValue,
-            string customFieldDefinition)
+        public override string GetColumnDefinition(FieldDefinition fieldDef)
         {
-            if (isRowVersion)
+            if (fieldDef.IsRowVersion)
                 return null;
 
             string fieldDefinition = null;
-            if (customFieldDefinition != null)
+            if (fieldDef.CustomFieldDefinition != null)
             {
-                fieldDefinition = customFieldDefinition;
+                fieldDefinition = fieldDef.CustomFieldDefinition;
             }
             else
             {
-                if (autoIncrement)
+                if (fieldDef.AutoIncrement)
                 {
-                    if (fieldType == typeof(long))
+                    if (fieldDef.ColumnType == typeof(long))
                         fieldDefinition = "bigserial";
-                    else if (fieldType == typeof(int))
+                    else if (fieldDef.ColumnType == typeof(int))
                         fieldDefinition = "serial";
                 }
                 else
                 {
-                    fieldDefinition = GetColumnTypeDefinition(fieldType, fieldLength, scale);
+                    fieldDefinition = GetColumnTypeDefinition(fieldDef.ColumnType, fieldDef.FieldLength, fieldDef.Scale);
                 }
             }
 
             var sql = StringBuilderCache.Allocate();
-            sql.AppendFormat("{0} {1}", GetQuotedColumnName(fieldName), fieldDefinition);
+            sql.AppendFormat("{0} {1}", GetQuotedColumnName(fieldDef.FieldName), fieldDefinition);
 
-            if (isPrimaryKey)
+            if (fieldDef.IsPrimaryKey)
             {
                 sql.Append(" PRIMARY KEY");
             }
             else
             {
-                if (isNullable)
+                if (fieldDef.IsNullable)
                 {
                     sql.Append(" NULL");
                 }
@@ -116,6 +106,7 @@ namespace ServiceStack.OrmLite.PostgreSQL
                 }
             }
 
+            var defaultValue = GetDefaultValue(fieldDef);
             if (!string.IsNullOrEmpty(defaultValue))
             {
                 sql.AppendFormat(DefaultValueFormat, defaultValue);
@@ -235,8 +226,8 @@ namespace ServiceStack.OrmLite.PostgreSQL
             string escapedSchema = modelDef.Schema.Replace(".", "\".\"");
             return string.Format("\"{0}\".\"{1}\"", escapedSchema, base.NamingStrategy.GetTableName(modelDef.ModelName));
         }
-
-        public override long InsertAndGetLastInsertId<T>(IDbCommand dbCmd)
+        
+        public override string GetLastInsertIdSqlSuffix<T>()
         {
             if (SelectIdentitySql == null)
                 throw new NotImplementedException("Returning last inserted identity is not implemented on this DB Provider.");
@@ -245,14 +236,10 @@ namespace ServiceStack.OrmLite.PostgreSQL
             {
                 var modelDef = GetModel(typeof(T));
                 var pkName = NamingStrategy.GetColumnName(modelDef.PrimaryKey.FieldName);
-                dbCmd.CommandText += " RETURNING \"{0}\"".Fmt(pkName);                
-            }
-            else
-            {
-                dbCmd.CommandText += "; " + SelectIdentitySql;
+                return $" RETURNING \"{pkName}\"";
             }
 
-            return dbCmd.ExecLongScalar();
+            return "; " + SelectIdentitySql;
         }
 
         public override void SetParameter(FieldDefinition fieldDef, IDbDataParameter p)
@@ -298,17 +285,12 @@ namespace ServiceStack.OrmLite.PostgreSQL
 
         protected override object GetValue<T>(FieldDefinition fieldDef, object obj)
         {
-            if (fieldDef.CustomFieldDefinition == "text[]")
+            switch (fieldDef.CustomFieldDefinition)
             {
-                return fieldDef.GetValue(obj);
-            }
-            if (fieldDef.CustomFieldDefinition == "integer[]")
-            {
-                return fieldDef.GetValue(obj);
-            }
-            if (fieldDef.CustomFieldDefinition == "bigint[]")
-            {
-                return fieldDef.GetValue(obj);
+                case "text[]":
+                case "integer[]":
+                case "bigint[]":
+                    return fieldDef.GetValue(obj);
             }
             return base.GetValue<T>(fieldDef, obj);
         }
@@ -348,32 +330,32 @@ namespace ServiceStack.OrmLite.PostgreSQL
         }
 
 #if ASYNC
-        public override Task OpenAsync(IDbConnection db, CancellationToken token)
+        public override Task OpenAsync(IDbConnection db, CancellationToken token = default(CancellationToken))
         {
             return Unwrap(db).OpenAsync(token);
         }
 
-        public override Task<IDataReader> ExecuteReaderAsync(IDbCommand cmd, CancellationToken token)
+        public override Task<IDataReader> ExecuteReaderAsync(IDbCommand cmd, CancellationToken token = default(CancellationToken))
         {
             return Unwrap(cmd).ExecuteReaderAsync(token).Then(x => (IDataReader)x);
         }
 
-        public override Task<int> ExecuteNonQueryAsync(IDbCommand cmd, CancellationToken token)
+        public override Task<int> ExecuteNonQueryAsync(IDbCommand cmd, CancellationToken token = default(CancellationToken))
         {
             return Unwrap(cmd).ExecuteNonQueryAsync(token);
         }
 
-        public override Task<object> ExecuteScalarAsync(IDbCommand cmd, CancellationToken token)
+        public override Task<object> ExecuteScalarAsync(IDbCommand cmd, CancellationToken token = default(CancellationToken))
         {
             return Unwrap(cmd).ExecuteScalarAsync(token);
         }
 
-        public override Task<bool> ReadAsync(IDataReader reader, CancellationToken token)
+        public override Task<bool> ReadAsync(IDataReader reader, CancellationToken token = default(CancellationToken))
         {
             return Unwrap(reader).ReadAsync(token);
         }
 
-        public override async Task<List<T>> ReaderEach<T>(IDataReader reader, Func<T> fn, CancellationToken token)
+        public override async Task<List<T>> ReaderEach<T>(IDataReader reader, Func<T> fn, CancellationToken token = default(CancellationToken))
         {
             try
             {
@@ -391,7 +373,7 @@ namespace ServiceStack.OrmLite.PostgreSQL
             }
         }
 
-        public override async Task<Return> ReaderEach<Return>(IDataReader reader, Action fn, Return source, CancellationToken token)
+        public override async Task<Return> ReaderEach<Return>(IDataReader reader, Action fn, Return source, CancellationToken token = default(CancellationToken))
         {
             try
             {
@@ -407,7 +389,7 @@ namespace ServiceStack.OrmLite.PostgreSQL
             }
         }
 
-        public override async Task<T> ReaderRead<T>(IDataReader reader, Func<T> fn, CancellationToken token)
+        public override async Task<T> ReaderRead<T>(IDataReader reader, Func<T> fn, CancellationToken token = default(CancellationToken))
         {
             try
             {

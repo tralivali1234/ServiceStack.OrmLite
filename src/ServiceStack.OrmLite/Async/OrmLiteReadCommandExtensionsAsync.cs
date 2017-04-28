@@ -1,5 +1,5 @@
 ﻿#if ASYNC
-// Copyright (c) Service Stack LLC. All Rights Reserved.
+// Copyright (c) ServiceStack, Inc. All Rights Reserved.
 // License: https://raw.github.com/ServiceStack/ServiceStack/master/license.txt
 
 using System;
@@ -224,7 +224,7 @@ namespace ServiceStack.OrmLite
         public static Task<long> LongScalarAsync(this IDbCommand dbCmd, CancellationToken token)
         {
             return dbCmd.GetDialectProvider().ExecuteScalarAsync(dbCmd, token)
-                                .Then(OrmLiteReadCommandExtensions.ToLong);
+                .Then(OrmLiteReadCommandExtensions.ToLong);
         }
 
         internal static Task<List<T>> ColumnAsync<T>(this IDbCommand dbCmd, string sql, object anonType, CancellationToken token)
